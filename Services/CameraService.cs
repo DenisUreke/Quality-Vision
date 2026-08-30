@@ -24,6 +24,11 @@ namespace Quality_Vision.Services
             }
         }
 
+        /// <summary>
+        /// Opens the camera using the configured device index and applies
+        /// resolution, frame rate, focus, exposure and gain settings.
+        /// Returns false if the camera cannot be opened.
+        /// </summary>
 
         public bool Start(CameraSettings settings)
         {
@@ -125,6 +130,12 @@ namespace Quality_Vision.Services
         }
 
 
+        /// <summary>
+        /// Captures a single frame from the camera.
+        /// Returns null if the camera is unavailable or the frame cannot be read.
+        /// The caller is responsible for disposing the returned Mat.
+        /// </summary>
+
         public Mat? GetFrame()
         {
             lock (_cameraLock)
@@ -153,6 +164,9 @@ namespace Quality_Vision.Services
         }
 
 
+        /// <summary>
+        /// Stops the camera and releases its resources.
+        /// </summary>
         public void Stop()
         {
             lock (_cameraLock)
@@ -161,9 +175,6 @@ namespace Quality_Vision.Services
             }
         }
 
-
-        // Internal version is used because Start()
-        // already owns the camera lock.
         private void StopInternal()
         {
             if (_capture == null)

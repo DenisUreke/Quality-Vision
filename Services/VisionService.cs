@@ -5,6 +5,10 @@ using System.Linq;
 
 namespace Quality_Vision.Services
 {
+    /// <summary>
+    /// Handles ArUco marker detection, perspective correction
+    /// and object detection for the measurement area.
+    /// </summary>
     public class VisionService : IDisposable
     {
         private readonly Dictionary _dictionary;
@@ -13,6 +17,12 @@ namespace Quality_Vision.Services
         private readonly DetectionSettings _detectionSettings;
         private readonly CalibrationSettings _calibrationSettings;
 
+
+        /// <summary>
+        /// Initializes the vision service using the configured ArUco,
+        /// object detection and measurement calibration settings.
+        /// Creates the ArUco dictionary and detector used for marker detection.
+        /// </summary>
         public VisionService(
             ArUcoSettings arucoSettings,
             DetectionSettings detectionSettings,
@@ -22,22 +32,17 @@ namespace Quality_Vision.Services
             _detectionSettings = detectionSettings;
             _calibrationSettings = calibrationSettings;
 
-            PredefinedDictionaryType dictionaryType =
-                GetDictionaryType(
-                    _arucoSettings.Dictionary
-                );
+            PredefinedDictionaryType dictionaryType = GetDictionaryType(_arucoSettings.Dictionary);
 
-            _dictionary =
-                CvAruco.GetPredefinedDictionary(
-                    dictionaryType
-                );
+            _dictionary = CvAruco.GetPredefinedDictionary(dictionaryType);
 
-            _detector =
-                new ArucoDetector(
-                    _dictionary
-                );
+            _detector = new ArucoDetector(_dictionary);
         }
 
+        /// <summary>
+        /// Detects ArUco markers in the provided image and returns
+        /// their marker IDs and corner coordinates.
+        /// </summary>
         public MarkerDetectionResult DetectMarkers(Mat frame)
         {
             _detector.DetectMarkers(
@@ -53,57 +58,50 @@ namespace Quality_Vision.Services
                 Corners = corners ?? Array.Empty<Point2f[]>()
             };
         }
-        private static PredefinedDictionaryType GetDictionaryType(
-    string dictionaryName)
+
+        /// <summary>
+        /// Converts the configured ArUco dictionary name into the
+        /// corresponding OpenCV predefined dictionary type.
+        /// Throws an exception if the dictionary name is not supported.
+        /// </summary>
+        private static PredefinedDictionaryType GetDictionaryType(string dictionaryName)
         {
             return dictionaryName switch
             {
-                "Dict4X4_50" =>
-                    PredefinedDictionaryType.Dict4X4_50,
+                "Dict4X4_50" => PredefinedDictionaryType.Dict4X4_50,
 
-                "Dict4X4_100" =>
-                    PredefinedDictionaryType.Dict4X4_100,
+                "Dict4X4_100" => PredefinedDictionaryType.Dict4X4_100,
 
-                "Dict4X4_250" =>
-                    PredefinedDictionaryType.Dict4X4_250,
+                "Dict4X4_250" => PredefinedDictionaryType.Dict4X4_250,
 
-                "Dict4X4_1000" =>
-                    PredefinedDictionaryType.Dict4X4_1000,
+                "Dict4X4_1000" => PredefinedDictionaryType.Dict4X4_1000,
 
-                "Dict5X5_50" =>
-                    PredefinedDictionaryType.Dict5X5_50,
+                "Dict5X5_50" => PredefinedDictionaryType.Dict5X5_50,
 
-                "Dict5X5_100" =>
-                    PredefinedDictionaryType.Dict5X5_100,
+                "Dict5X5_100" => PredefinedDictionaryType.Dict5X5_100,
 
-                "Dict5X5_250" =>
-                    PredefinedDictionaryType.Dict5X5_250,
+                "Dict5X5_250" =>  PredefinedDictionaryType.Dict5X5_250,
 
-                "Dict5X5_1000" =>
-                    PredefinedDictionaryType.Dict5X5_1000,
+                "Dict5X5_1000" => PredefinedDictionaryType.Dict5X5_1000,
 
-                "Dict6X6_50" =>
-                    PredefinedDictionaryType.Dict6X6_50,
+                "Dict6X6_50" =>  PredefinedDictionaryType.Dict6X6_50,
 
-                "Dict6X6_100" =>
-                    PredefinedDictionaryType.Dict6X6_100,
+                "Dict6X6_100" => PredefinedDictionaryType.Dict6X6_100,
 
-                "Dict6X6_250" =>
-                    PredefinedDictionaryType.Dict6X6_250,
+                "Dict6X6_250" => PredefinedDictionaryType.Dict6X6_250,
 
-                "Dict6X6_1000" =>
-                    PredefinedDictionaryType.Dict6X6_1000,
+                "Dict6X6_1000" => PredefinedDictionaryType.Dict6X6_1000,
 
-                _ =>
-                    throw new InvalidOperationException(
-                        $"Unsupported ArUco dictionary: {dictionaryName}"
-                    )
+                _ => throw new InvalidOperationException($"Unsupported ArUco dictionary: {dictionaryName}")
             };
         }
 
-        public Mat? CreateRectifiedMeasurementArea(
-    Mat frame,
-    MarkerDetectionResult detection)
+        /// <summary>
+        /// Creates a perspective-corrected view of the physical measurement area
+        /// using the four configured ArUco reference markers.
+        /// Returns null if the required markers are missing or the calibration is invalid.
+        /// </summary>
+        public Mat? CreateRectifiedMeasurementArea(Mat frame, MarkerDetectionResult detection)
         {
             int[] requiredIds =
             {
@@ -239,6 +237,12 @@ namespace Quality_Vision.Services
             return rectified;
         }
 
+
+        /// <summary>
+        /// Detects the largest valid object inside the rectified measurement area
+        /// and returns the smallest rotated rectangle that encloses it.
+        /// Returns null if no suitable object can be detected.
+        /// </summary>
         public RotatedRect? DetectObject(Mat rectified)
         {
             if (rectified.Empty())
@@ -292,11 +296,7 @@ namespace Quality_Vision.Services
             // CLOSE SMALL GAPS IN THE DETECTED OBJECT EDGES
             // ------------------------------------------------
 
-            int kernelSize =
-                Math.Max(
-                    1,
-                    _detectionSettings.MorphologyKernelSize
-                );
+            int kernelSize = Math.Max(1, _detectionSettings.MorphologyKernelSize);
 
             if (kernelSize % 2 == 0)
             {
@@ -318,10 +318,7 @@ namespace Quality_Vision.Services
                 MorphTypes.Close,
                 kernel,
                 iterations:
-                    Math.Max(
-                        1,
-                        _detectionSettings.MorphologyIterations
-                    )
+                    Math.Max(1, _detectionSettings.MorphologyIterations)
             );
 
             // ------------------------------------------------
@@ -341,8 +338,7 @@ namespace Quality_Vision.Services
                 return null;
             }
 
-            double imageArea =
-                rectified.Width * rectified.Height;
+            double imageArea = rectified.Width * rectified.Height;
 
             RotatedRect? bestRectangle = null;
 
@@ -350,8 +346,7 @@ namespace Quality_Vision.Services
 
             foreach (OpenCvSharp.Point[] contour in contours)
             {
-                double contourArea =
-                    Cv2.ContourArea(contour);
+                double contourArea = Cv2.ContourArea(contour);
 
                 if (contourArea <
                     imageArea *
@@ -367,8 +362,7 @@ namespace Quality_Vision.Services
                     continue;
                 }
 
-                RotatedRect rectangle =
-                    Cv2.MinAreaRect(contour);
+                RotatedRect rectangle = Cv2.MinAreaRect(contour);
 
                 if (contourArea > bestArea)
                 {
@@ -378,14 +372,6 @@ namespace Quality_Vision.Services
             }
 
             return bestRectangle;
-        }
-
-        private static double Distance(Point2f a, Point2f b)
-        {
-            double dx = a.X - b.X;
-            double dy = a.Y - b.Y;
-
-            return Math.Sqrt(dx * dx + dy * dy);
         }
 
         public void Dispose()

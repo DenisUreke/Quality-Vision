@@ -3,6 +3,11 @@ using Quality_Vision.Models;
 
 namespace Quality_Vision.Services
 {
+    /// <summary>
+    /// Coordinates a complete measurement by capturing a camera frame,
+    /// detecting the reference markers and object, and calculating
+    /// the object's physical X and Y dimensions.
+    /// </summary>
     public class MeasurementService
     {
         private readonly CameraService _cameraService;
@@ -11,9 +16,12 @@ namespace Quality_Vision.Services
 
         // Prevent two actual measurements from running
         // at the same time.
-        private readonly SemaphoreSlim _measurementLock =
-            new(1, 1);
+        private readonly SemaphoreSlim _measurementLock = new(1, 1);
 
+        /// <summary>
+        /// Initializes the measurement service with the camera,
+        /// vision processing service and application settings.
+        /// </summary>
         public MeasurementService(
             CameraService cameraService,
             VisionService visionService,
@@ -24,8 +32,11 @@ namespace Quality_Vision.Services
             _settings = settings;
         }
 
-        public async Task<MeasurementResult> MeasureAsync(
-            Guid measurementId)
+        /// <summary>
+        /// Performs one complete measurement and returns the result.
+        /// Only one measurement can run at a time.
+        /// </summary>
+        public async Task<MeasurementResult> MeasureAsync(Guid measurementId)
         {
             await _measurementLock.WaitAsync();
 
@@ -35,15 +46,11 @@ namespace Quality_Vision.Services
                 // CAPTURE ONE CAMERA FRAME
                 // -----------------------------------
 
-                using Mat? frame =
-                    _cameraService.GetFrame();
+                using Mat? frame = _cameraService.GetFrame();
 
                 if (frame == null)
                 {
-                    return CreateFailureResult(
-                        measurementId,
-                        "Could not capture camera frame."
-                    );
+                    return CreateFailureResult( measurementId,"Could not capture camera frame.");
                 }
 
 
@@ -51,10 +58,7 @@ namespace Quality_Vision.Services
                 // DETECT REFERENCE MARKERS
                 // -----------------------------------
 
-                MarkerDetectionResult detection =
-                    _visionService.DetectMarkers(
-                        frame
-                    );
+                MarkerDetectionResult detection = _visionService.DetectMarkers(frame);
 
                 int[] requiredMarkerIds =
                 {
@@ -72,10 +76,7 @@ namespace Quality_Vision.Services
 
                 if (!allMarkersFound)
                 {
-                    return CreateFailureResult(
-                        measurementId,
-                        "All reference markers were not detected."
-                    );
+                    return CreateFailureResult(measurementId,"All reference markers were not detected.");
                 }
 
 
@@ -92,10 +93,7 @@ namespace Quality_Vision.Services
 
                 if (rectified == null)
                 {
-                    return CreateFailureResult(
-                        measurementId,
-                        "Could not create rectified measurement area."
-                    );
+                    return CreateFailureResult(measurementId, "Could not create rectified measurement area.");
                 }
 
 
@@ -103,17 +101,11 @@ namespace Quality_Vision.Services
                 // DETECT OBJECT
                 // -----------------------------------
 
-                RotatedRect? objectRectangle =
-                    _visionService.DetectObject(
-                        rectified
-                    );
+                RotatedRect? objectRectangle = _visionService.DetectObject(rectified);
 
                 if (!objectRectangle.HasValue)
                 {
-                    return CreateFailureResult(
-                        measurementId,
-                        "No measurable object was detected."
-                    );
+                    return CreateFailureResult(measurementId,"No measurable object was detected.");
                 }
 
 
@@ -121,54 +113,34 @@ namespace Quality_Vision.Services
                 // CALCULATE OBJECT DIMENSIONS
                 // -----------------------------------
 
-                RotatedRect rectangle =
-                    objectRectangle.Value;
+                RotatedRect rectangle = objectRectangle.Value;
 
-                double side1Pixels =
-                    rectangle.Size.Width;
+                double side1Pixels = rectangle.Size.Width;
 
-                double side2Pixels =
-                    rectangle.Size.Height;
+                double side2Pixels = rectangle.Size.Height;
 
                 // X = longest material side
                 // Y = shortest material side
-                double xPixels =
-                    Math.Max(
-                        side1Pixels,
-                        side2Pixels
-                    );
+                double xPixels = Math.Max(side1Pixels, side2Pixels);
 
-                double yPixels =
-                    Math.Min(
-                        side1Pixels,
-                        side2Pixels
-                    );
-
+                double yPixels = Math.Min(side1Pixels, side2Pixels);
 
                 // -----------------------------------
                 // CONVERT PIXELS TO MILLIMETERS
                 // -----------------------------------
 
-                double pixelsPerMm =
-                    _settings.Calibration
-                        .RectifiedPixelsPerMm;
+                double pixelsPerMm = _settings.Calibration.RectifiedPixelsPerMm;
 
                 if (pixelsPerMm <= 0)
                 {
-                    return CreateFailureResult(
-                        measurementId,
-                        "Invalid RectifiedPixelsPerMm configuration."
-                    );
+                    return CreateFailureResult(measurementId, "Invalid RectifiedPixelsPerMm configuration.");
                 }
 
-                double mmPerPixel =
-                    1.0 / pixelsPerMm;
+                double mmPerPixel = 1.0 / pixelsPerMm;
 
-                double xMm =
-                    xPixels * mmPerPixel;
+                double xMm = xPixels * mmPerPixel;
 
-                double yMm =
-                    yPixels * mmPerPixel;
+                double yMm = yPixels * mmPerPixel;
 
 
                 // -----------------------------------
@@ -177,30 +149,23 @@ namespace Quality_Vision.Services
 
                 return new MeasurementResult
                 {
-                    MeasurementId =
-                        measurementId,
+                    MeasurementId = measurementId,
 
-                    StationId =
-                        _settings.Station.StationId,
+                    StationId = _settings.Station.StationId,
 
                     Success = true,
 
                     X = xMm,
                     Y = yMm,
 
-                    Message =
-                        "Measurement successful.",
+                    Message = "Measurement successful.",
 
-                    Timestamp =
-                        DateTime.Now
+                    Timestamp = DateTime.Now
                 };
             }
             catch (Exception ex)
             {
-                return CreateFailureResult(
-                    measurementId,
-                    $"Measurement failed: {ex.Message}"
-                );
+                return CreateFailureResult( measurementId, $"Measurement failed: {ex.Message}");
             }
             finally
             {
@@ -208,18 +173,17 @@ namespace Quality_Vision.Services
             }
         }
 
-
-        private MeasurementResult CreateFailureResult(
-            Guid measurementId,
-            string message)
+        /// <summary>
+        /// Creates a failed measurement result for the current station
+        /// using the supplied error message.
+        /// </summary>
+        private MeasurementResult CreateFailureResult(Guid measurementId, string message)
         {
             return new MeasurementResult
             {
-                MeasurementId =
-                    measurementId,
+                MeasurementId = measurementId,
 
-                StationId =
-                    _settings.Station.StationId,
+                StationId = _settings.Station.StationId,
 
                 Success = false,
 
@@ -228,8 +192,7 @@ namespace Quality_Vision.Services
 
                 Message = message,
 
-                Timestamp =
-                    DateTime.Now
+                Timestamp = DateTime.Now
             };
         }
     }
