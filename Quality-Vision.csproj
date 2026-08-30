@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <None Remove="Assets\nobia_logo.png" />
+    <None Remove="Assets\VisionIcon.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +26,9 @@
 
   <ItemGroup>
     <Resource Include="Assets\nobia_logo.png" />
+    <Resource Include="Assets\VisionIcon.ico">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
   </ItemGroup>
 
 	<ItemGroup>

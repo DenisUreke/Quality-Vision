@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Quality Vision"
+        Icon="Assets/VisionIcon.ico"
         Width="1400"
         Height="850"
         MinWidth="1100"
