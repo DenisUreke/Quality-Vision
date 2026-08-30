@@ -50,7 +50,10 @@ namespace Quality_Vision.Services
 
                 if (frame == null)
                 {
-                    return CreateFailureResult( measurementId,"Could not capture camera frame.");
+                    return CreateFailureResult(
+                        measurementId,
+                        "Could not capture camera frame."
+                        );
                 }
 
 
@@ -76,7 +79,10 @@ namespace Quality_Vision.Services
 
                 if (!allMarkersFound)
                 {
-                    return CreateFailureResult(measurementId,"All reference markers were not detected.");
+                    return CreateFailureResult(
+                        measurementId,
+                        "All reference markers were not detected."
+                        );
                 }
 
 
@@ -93,7 +99,10 @@ namespace Quality_Vision.Services
 
                 if (rectified == null)
                 {
-                    return CreateFailureResult(measurementId, "Could not create rectified measurement area.");
+                    return CreateFailureResult(
+                        measurementId, 
+                        "Could not create rectified measurement area."
+                        );
                 }
 
 
@@ -105,7 +114,10 @@ namespace Quality_Vision.Services
 
                 if (!objectRectangle.HasValue)
                 {
-                    return CreateFailureResult(measurementId,"No measurable object was detected.");
+                    return CreateFailureResult(
+                        measurementId,
+                        "No measurable object was detected."
+                        );
                 }
 
 
@@ -129,19 +141,45 @@ namespace Quality_Vision.Services
                 // CONVERT PIXELS TO MILLIMETERS
                 // -----------------------------------
 
-                double pixelsPerMm = _settings.Calibration.RectifiedPixelsPerMm;
+                double pixelsPerMm =
+                    _settings.Calibration.RectifiedPixelsPerMm;
 
                 if (pixelsPerMm <= 0)
                 {
-                    return CreateFailureResult(measurementId, "Invalid RectifiedPixelsPerMm configuration.");
+                    return CreateFailureResult(
+                        measurementId,
+                        "Invalid RectifiedPixelsPerMm configuration."
+                    );
                 }
 
                 double mmPerPixel = 1.0 / pixelsPerMm;
 
                 double xMm = xPixels * mmPerPixel;
-
                 double yMm = yPixels * mmPerPixel;
 
+
+                // -----------------------------------
+                // CORRECT FOR MATERIAL HEIGHT
+                // -----------------------------------
+
+                double cameraDistanceMm = _settings.Calibration.CameraDistanceMm;
+
+                double materialThicknessMm = _settings.Calibration.MaterialThicknessMm;
+
+                if (cameraDistanceMm <= materialThicknessMm)
+                {
+                    return CreateFailureResult(
+                        measurementId,
+                        "Invalid camera distance or material thickness configuration."
+                    );
+                }
+
+                double heightCorrection =
+                    (cameraDistanceMm - materialThicknessMm) /
+                    cameraDistanceMm;
+
+                xMm *= heightCorrection;
+                yMm *= heightCorrection;
 
                 // -----------------------------------
                 // SUCCESSFUL RESULT
@@ -165,7 +203,9 @@ namespace Quality_Vision.Services
             }
             catch (Exception ex)
             {
-                return CreateFailureResult( measurementId, $"Measurement failed: {ex.Message}");
+                return CreateFailureResult(
+                    measurementId, 
+                    $"Measurement failed: {ex.Message}");
             }
             finally
             {

@@ -59,6 +59,9 @@ namespace Quality_Vision.Models
         public double MeasurementAreaHeightMm { get; set; }
 
         public double RectifiedPixelsPerMm { get; set; } = 1.0;
+
+        public double CameraDistanceMm { get; set; }
+        public double MaterialThicknessMm { get; set; } = 16.0;
     }
 
     public class DetectionSettings
