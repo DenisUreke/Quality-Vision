@@ -1,10 +1,11 @@
-﻿using OpenCvSharp;
+﻿using Microsoft.Extensions.Configuration;
+using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
+using Quality_Vision.Api.Services;
 using Quality_Vision.Models;
 using Quality_Vision.Services;
 using System.Linq;
 using System.Windows.Threading;
-using Microsoft.Extensions.Configuration;
 
 namespace Quality_Vision
 {
@@ -15,6 +16,8 @@ namespace Quality_Vision
         private readonly DispatcherTimer _cameraTimer;
         private readonly AppSettings _settings;
         private int _measurementMissFrames = 0;
+
+        private readonly StationApiHost _stationApiHost;
 
         public MainWindow()
         {
@@ -40,6 +43,12 @@ namespace Quality_Vision
                 _settings.Detection,
                 _settings.Calibration
             );
+            _stationApiHost =
+                new StationApiHost(
+                    _settings,
+                    _cameraService,
+                    _visionService
+                );
 
             int previewFps =
                 Math.Max(1, _settings.Vision.PreviewFps);
@@ -56,7 +65,7 @@ namespace Quality_Vision
             Closed += MainWindow_Closed;
         }
 
-        private void MainWindow_Loaded(
+        private async void MainWindow_Loaded(
     object sender,
     System.Windows.RoutedEventArgs e)
         {
@@ -110,6 +119,8 @@ namespace Quality_Vision
                         215,
                         18,
                         19));
+
+            await _stationApiHost.StartAsync();
 
             _cameraTimer.Start();
         }
@@ -510,11 +521,13 @@ namespace Quality_Vision
             }
         }
 
-        private void MainWindow_Closed(
+        private async void MainWindow_Closed(
             object? sender,
             System.EventArgs e)
         {
             _cameraTimer.Stop();
+
+            await _stationApiHost.StopAsync();
 
             _visionService.Dispose();
             _cameraService.Dispose();

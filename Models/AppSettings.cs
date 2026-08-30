@@ -14,7 +14,8 @@ namespace Quality_Vision.Models
         public CalibrationSettings Calibration { get; set; } = new();
         public DetectionSettings Detection { get; set; } = new();
         public VisionSettings Vision { get; set; } = new();
-        public MesApiSettings MesApi { get; set; } = new();
+        public InsightApiSettings InsightApi { get; set; } = new();
+        public StationApiSettings StationApi { get; set; } = new();
     }
 
     public class StationSettings
@@ -80,10 +81,16 @@ namespace Quality_Vision.Models
         public int PreviewFps { get; set; } = 30;
     }
 
-    public class MesApiSettings
+    public class InsightApiSettings
     {
         public string BaseUrl { get; set; } = string.Empty;
         public string MeasurementEndpoint { get; set; } = string.Empty;
         public int TimeoutSeconds { get; set; } = 10;
+    }
+
+    public class StationApiSettings
+    {
+        public string Url { get; set; } =
+            "http://0.0.0.0:5000";
     }
 }

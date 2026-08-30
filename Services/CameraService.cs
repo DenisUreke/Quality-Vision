@@ -1,10 +1,5 @@
 ﻿using OpenCvSharp;
 using Quality_Vision.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Quality_Vision.Services
 {
@@ -12,100 +7,175 @@ namespace Quality_Vision.Services
     {
         private VideoCapture? _capture;
 
-        public bool IsConnected =>
-            _capture != null && _capture.IsOpened();
+        // Protects access to the physical camera.
+        // Only one thread may Start, Stop or Read the camera at a time.
+        private readonly object _cameraLock = new();
+
+
+        public bool IsConnected
+        {
+            get
+            {
+                lock (_cameraLock)
+                {
+                    return _capture != null &&
+                           _capture.IsOpened();
+                }
+            }
+        }
+
 
         public bool Start(CameraSettings settings)
         {
-            Stop();
-
-            _capture = new VideoCapture(settings.CameraIndex);
-
-            if (!_capture.IsOpened())
+            lock (_cameraLock)
             {
-                _capture.Dispose();
-                _capture = null;
+                StopInternal();
 
-                return false;
-            }
+                _capture =
+                    new VideoCapture(
+                        settings.CameraIndex
+                    );
 
-            // Resolution
-            _capture.Set(
-                VideoCaptureProperties.FrameWidth,
-                settings.Width);
+                if (!_capture.IsOpened())
+                {
+                    _capture.Dispose();
+                    _capture = null;
 
-            _capture.Set(
-                VideoCaptureProperties.FrameHeight,
-                settings.Height);
+                    return false;
+                }
 
-            // FPS
-            _capture.Set(
-                VideoCaptureProperties.Fps,
-                settings.Fps);
 
-            // Autofocus
-            _capture.Set(
-                VideoCaptureProperties.AutoFocus,
-                settings.AutoFocus ? 1 : 0);
+                // -----------------------------
+                // CAMERA RESOLUTION
+                // -----------------------------
 
-            // Manual focus
-            if (!settings.AutoFocus)
-            {
                 _capture.Set(
-                    VideoCaptureProperties.Focus,
-                    settings.Focus);
-            }
+                    VideoCaptureProperties.FrameWidth,
+                    settings.Width
+                );
 
-            // Auto exposure
-            _capture.Set(
-                VideoCaptureProperties.AutoExposure,
-                settings.AutoExposure ? 1 : 0);
-
-            // Manual exposure
-            if (!settings.AutoExposure)
-            {
                 _capture.Set(
-                    VideoCaptureProperties.Exposure,
-                    settings.Exposure);
+                    VideoCaptureProperties.FrameHeight,
+                    settings.Height
+                );
+
+
+                // -----------------------------
+                // CAMERA FPS
+                // -----------------------------
+
+                _capture.Set(
+                    VideoCaptureProperties.Fps,
+                    settings.Fps
+                );
+
+
+                // -----------------------------
+                // AUTOFOCUS
+                // -----------------------------
+
+                _capture.Set(
+                    VideoCaptureProperties.AutoFocus,
+                    settings.AutoFocus ? 1 : 0
+                );
+
+                // Manual focus is only used when
+                // autofocus has been disabled.
+                if (!settings.AutoFocus)
+                {
+                    _capture.Set(
+                        VideoCaptureProperties.Focus,
+                        settings.Focus
+                    );
+                }
+
+
+                // -----------------------------
+                // AUTO EXPOSURE
+                // -----------------------------
+
+                _capture.Set(
+                    VideoCaptureProperties.AutoExposure,
+                    settings.AutoExposure ? 1 : 0
+                );
+
+                // Manual exposure is only used
+                // when auto exposure is disabled.
+                if (!settings.AutoExposure)
+                {
+                    _capture.Set(
+                        VideoCaptureProperties.Exposure,
+                        settings.Exposure
+                    );
+                }
+
+
+                // -----------------------------
+                // GAIN
+                // -----------------------------
+
+                _capture.Set(
+                    VideoCaptureProperties.Gain,
+                    settings.Gain
+                );
+
+
+                return true;
             }
-
-            // Gain
-            _capture.Set(
-                VideoCaptureProperties.Gain,
-                settings.Gain);
-
-            return true;
         }
+
 
         public Mat? GetFrame()
         {
-            if (_capture == null || !_capture.IsOpened())
+            lock (_cameraLock)
             {
-                return null;
+                if (_capture == null ||
+                    !_capture.IsOpened())
+                {
+                    return null;
+                }
+
+                var frame = new Mat();
+
+                bool success =
+                    _capture.Read(frame);
+
+                if (!success ||
+                    frame.Empty())
+                {
+                    frame.Dispose();
+
+                    return null;
+                }
+
+                return frame;
             }
-
-            var frame = new Mat();
-
-            bool success = _capture.Read(frame);
-
-            if (!success || frame.Empty())
-            {
-                frame.Dispose();
-                return null;
-            }
-
-            return frame;
         }
+
 
         public void Stop()
         {
-            if (_capture != null)
+            lock (_cameraLock)
             {
-                _capture.Release();
-                _capture.Dispose();
-                _capture = null;
+                StopInternal();
             }
         }
+
+
+        // Internal version is used because Start()
+        // already owns the camera lock.
+        private void StopInternal()
+        {
+            if (_capture == null)
+            {
+                return;
+            }
+
+            _capture.Release();
+            _capture.Dispose();
+            _capture = null;
+        }
+
 
         public void Dispose()
         {
