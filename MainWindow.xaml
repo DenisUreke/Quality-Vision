@@ -52,7 +52,8 @@
                             VerticalAlignment="Center"
                             HorizontalAlignment="Right">
 
-                    <TextBlock Text="Station 3"
+                    <TextBlock x:Name="StationNameText"
+                               Text="Station"
                                FontSize="20"
                                FontWeight="SemiBold"
                                Foreground="#F2F2F2"
@@ -108,7 +109,6 @@
                     Padding="25">
 
                 <Grid>
-
                     <Grid.RowDefinitions>
 
                         <!-- CAMERA -->
@@ -117,7 +117,7 @@
                         <!-- MARKERS -->
                         <RowDefinition Height="Auto"/>
 
-                        <!-- MEASUREMENTS -->
+                        <!-- LIVE MEASUREMENTS -->
                         <RowDefinition Height="Auto"/>
 
                         <!-- MEASUREMENT VIEW -->
@@ -130,7 +130,6 @@
                         <RowDefinition Height="Auto"/>
 
                     </Grid.RowDefinitions>
-
 
                     <!-- CAMERA STATUS -->
                     <StackPanel Grid.Row="0"
@@ -227,10 +226,11 @@
 
                     <!-- MEASUREMENT VIEW -->
                     <Border Grid.Row="3"
-                            Background="#292929"
-                            CornerRadius="8"
-                            Padding="12"
-                            Margin="0,0,0,15">
+        Background="#292929"
+        CornerRadius="8"
+        Padding="12"
+        Margin="0,0,0,15"
+        VerticalAlignment="Stretch">
 
                         <Grid>
 
@@ -239,23 +239,21 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-
                             <TextBlock Grid.Row="0"
-                                       Text="Measurement view"
-                                       FontSize="13"
-                                       Foreground="#A3A3A3"
-                                       Margin="0,0,0,8"/>
-
+                   Text="Measurement view"
+                   FontSize="13"
+                   Foreground="#A3A3A3"
+                   Margin="0,0,0,8"/>
 
                             <Border Grid.Row="1"
-                                    Background="#0F0F0F"
-                                    CornerRadius="6"
-                                    MinHeight="120">
+                Background="#0F0F0F"
+                CornerRadius="6"
+                VerticalAlignment="Stretch">
 
                                 <Image x:Name="RectifiedPreview"
-                                       Stretch="Uniform"
-                                       HorizontalAlignment="Stretch"
-                                       VerticalAlignment="Stretch"/>
+                   Stretch="Uniform"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch"/>
 
                             </Border>
 
@@ -266,44 +264,96 @@
 
                     <!-- LAST MES CALL -->
                     <Border Grid.Row="4"
-                            Background="#292929"
-                            CornerRadius="8"
-                            Padding="14"
-                            Margin="0,0,0,15">
+        Background="#292929"
+        CornerRadius="8"
+        Padding="14"
+        Margin="0,0,0,15">
 
                         <Grid>
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
+                            <!-- MES STATUS -->
+                            <Grid Grid.Row="0">
 
-                            <StackPanel Grid.Column="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                                <TextBlock Text="Last MES call"
-                                           FontSize="13"
-                                           Foreground="#A3A3A3"/>
+                                <StackPanel Grid.Column="0">
 
-                                <TextBlock Text="● 200 OK"
-                                           FontSize="17"
-                                           FontWeight="SemiBold"
-                                           Foreground="#22C55E"
-                                           Margin="0,4,0,0"/>
+                                    <TextBlock Text="Last MES call"
+                           FontSize="13"
+                           Foreground="#A3A3A3"/>
 
-                            </StackPanel>
+                                    <TextBlock x:Name="LastMesStatusText"
+                           Text="● No call yet"
+                           FontSize="17"
+                           FontWeight="SemiBold"
+                           Foreground="#808080"
+                           Margin="0,4,0,0"/>
 
+                                </StackPanel>
 
-                            <TextBlock Grid.Column="1"
-                                       Text="18:23:14"
-                                       FontSize="13"
-                                       Foreground="#808080"
-                                       VerticalAlignment="Center"/>
+                                <TextBlock x:Name="LastMesTimeText"
+                       Grid.Column="1"
+                       Text="--:--:--"
+                       FontSize="13"
+                       Foreground="#808080"
+                       VerticalAlignment="Center"/>
+
+                            </Grid>
+
+                            <!-- LAST SENT MEASUREMENT -->
+                            <Grid Grid.Row="1"
+              Margin="0,12,0,0">
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- X -->
+                                <StackPanel Grid.Column="0">
+
+                                    <TextBlock Text="Last X"
+                           FontSize="12"
+                           Foreground="#808080"/>
+
+                                    <TextBlock x:Name="LastMesXText"
+                           Text="--- mm"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="#F2F2F2"
+                           Margin="0,3,0,0"/>
+
+                                </StackPanel>
+
+                                <!-- Y -->
+                                <StackPanel Grid.Column="1">
+
+                                    <TextBlock Text="Last Y"
+                           FontSize="12"
+                           Foreground="#808080"/>
+
+                                    <TextBlock x:Name="LastMesYText"
+                           Text="--- mm"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="#F2F2F2"
+                           Margin="0,3,0,0"/>
+
+                                </StackPanel>
+
+                            </Grid>
 
                         </Grid>
 
                     </Border>
-
 
                     <!-- MANUAL MEASURE BUTTON -->
                     <Button Grid.Row="5"

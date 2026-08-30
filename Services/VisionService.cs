@@ -9,14 +9,33 @@ namespace Quality_Vision.Services
     {
         private readonly Dictionary _dictionary;
         private readonly ArucoDetector _detector;
+        private readonly ArUcoSettings _arucoSettings;
+        private readonly DetectionSettings _detectionSettings;
+        private readonly CalibrationSettings _calibrationSettings;
 
-        public VisionService()
+        public VisionService(
+            ArUcoSettings arucoSettings,
+            DetectionSettings detectionSettings,
+            CalibrationSettings calibrationSettings)
         {
-            _dictionary = CvAruco.GetPredefinedDictionary(
-                PredefinedDictionaryType.Dict4X4_50
-            );
+            _arucoSettings = arucoSettings;
+            _detectionSettings = detectionSettings;
+            _calibrationSettings = calibrationSettings;
 
-            _detector = new ArucoDetector(_dictionary);
+            PredefinedDictionaryType dictionaryType =
+                GetDictionaryType(
+                    _arucoSettings.Dictionary
+                );
+
+            _dictionary =
+                CvAruco.GetPredefinedDictionary(
+                    dictionaryType
+                );
+
+            _detector =
+                new ArucoDetector(
+                    _dictionary
+                );
         }
 
         public MarkerDetectionResult DetectMarkers(Mat frame)
@@ -34,12 +53,65 @@ namespace Quality_Vision.Services
                 Corners = corners ?? Array.Empty<Point2f[]>()
             };
         }
+        private static PredefinedDictionaryType GetDictionaryType(
+    string dictionaryName)
+        {
+            return dictionaryName switch
+            {
+                "Dict4X4_50" =>
+                    PredefinedDictionaryType.Dict4X4_50,
+
+                "Dict4X4_100" =>
+                    PredefinedDictionaryType.Dict4X4_100,
+
+                "Dict4X4_250" =>
+                    PredefinedDictionaryType.Dict4X4_250,
+
+                "Dict4X4_1000" =>
+                    PredefinedDictionaryType.Dict4X4_1000,
+
+                "Dict5X5_50" =>
+                    PredefinedDictionaryType.Dict5X5_50,
+
+                "Dict5X5_100" =>
+                    PredefinedDictionaryType.Dict5X5_100,
+
+                "Dict5X5_250" =>
+                    PredefinedDictionaryType.Dict5X5_250,
+
+                "Dict5X5_1000" =>
+                    PredefinedDictionaryType.Dict5X5_1000,
+
+                "Dict6X6_50" =>
+                    PredefinedDictionaryType.Dict6X6_50,
+
+                "Dict6X6_100" =>
+                    PredefinedDictionaryType.Dict6X6_100,
+
+                "Dict6X6_250" =>
+                    PredefinedDictionaryType.Dict6X6_250,
+
+                "Dict6X6_1000" =>
+                    PredefinedDictionaryType.Dict6X6_1000,
+
+                _ =>
+                    throw new InvalidOperationException(
+                        $"Unsupported ArUco dictionary: {dictionaryName}"
+                    )
+            };
+        }
 
         public Mat? CreateRectifiedMeasurementArea(
     Mat frame,
     MarkerDetectionResult detection)
         {
-            int[] requiredIds = { 1, 2, 3, 4 };
+            int[] requiredIds =
+            {
+                _arucoSettings.TopLeftMarkerId,
+                _arucoSettings.TopRightMarkerId,
+                _arucoSettings.BottomRightMarkerId,
+                _arucoSettings.BottomLeftMarkerId
+            };
 
             if (!requiredIds.All(id => detection.Ids.Contains(id)))
             {
@@ -95,20 +167,38 @@ namespace Quality_Vision.Services
                 innerCorners[id] = innerCorner;
             }
 
-            Point2f topLeft = innerCorners[1];
-            Point2f topRight = innerCorners[2];
-            Point2f bottomRight = innerCorners[3];
-            Point2f bottomLeft = innerCorners[4];
+            Point2f topLeft =
+                innerCorners[_arucoSettings.TopLeftMarkerId];
+
+            Point2f topRight =
+                innerCorners[_arucoSettings.TopRightMarkerId];
+
+            Point2f bottomRight =
+                innerCorners[_arucoSettings.BottomRightMarkerId];
+
+            Point2f bottomLeft =
+                innerCorners[_arucoSettings.BottomLeftMarkerId];
 
             // Calculate approximate dimensions in pixels
-            double topWidth = Distance(topLeft, topRight);
-            double bottomWidth = Distance(bottomLeft, bottomRight);
+            double pixelsPerMm =
+                _calibrationSettings.RectifiedPixelsPerMm;
 
-            double leftHeight = Distance(topLeft, bottomLeft);
-            double rightHeight = Distance(topRight, bottomRight);
+            if (pixelsPerMm <= 0)
+            {
+                return null;
+            }
 
-            int outputWidth = (int)Math.Max(topWidth, bottomWidth);
-            int outputHeight = (int)Math.Max(leftHeight, rightHeight);
+            int outputWidth =
+                (int)Math.Round(
+                    _calibrationSettings.MeasurementAreaWidthMm *
+                    pixelsPerMm
+                );
+
+            int outputHeight =
+                (int)Math.Round(
+                    _calibrationSettings.MeasurementAreaHeightMm *
+                    pixelsPerMm
+                );
 
             if (outputWidth <= 0 || outputHeight <= 0)
             {
@@ -149,7 +239,7 @@ namespace Quality_Vision.Services
             return rectified;
         }
 
-        public OpenCvSharp.Rect? DetectObject(Mat rectified)
+        public RotatedRect? DetectObject(Mat rectified)
         {
             if (rectified.Empty())
             {
@@ -159,33 +249,87 @@ namespace Quality_Vision.Services
             using Mat gray = new Mat();
             using Mat blurred = new Mat();
             using Mat edges = new Mat();
+            using Mat closedEdges = new Mat();
 
-            // Convert to grayscale
+            // Convert to grayscale.
             Cv2.CvtColor(
                 rectified,
                 gray,
                 ColorConversionCodes.BGR2GRAY
             );
 
-            // Remove some small image noise
+            // Gaussian blur size must be odd.
+            int blurSize =
+                Math.Max(
+                    1,
+                    _detectionSettings.GaussianBlurSize
+                );
+
+            if (blurSize % 2 == 0)
+            {
+                blurSize++;
+            }
+
             Cv2.GaussianBlur(
                 gray,
                 blurred,
-                new OpenCvSharp.Size(5, 5),
+                new OpenCvSharp.Size(
+                    blurSize,
+                    blurSize
+                ),
                 0
             );
 
-            // Find strong edges
+            // Detect object edges.
             Cv2.Canny(
                 blurred,
                 edges,
-                50,
-                150
+                _detectionSettings.CannyThreshold1,
+                _detectionSettings.CannyThreshold2
             );
 
-            // Find external contours
-            Cv2.FindContours(
+            // ------------------------------------------------
+            // CLOSE SMALL GAPS IN THE DETECTED OBJECT EDGES
+            // ------------------------------------------------
+
+            int kernelSize =
+                Math.Max(
+                    1,
+                    _detectionSettings.MorphologyKernelSize
+                );
+
+            if (kernelSize % 2 == 0)
+            {
+                kernelSize++;
+            }
+
+            using Mat kernel =
+                Cv2.GetStructuringElement(
+                    MorphShapes.Rect,
+                    new OpenCvSharp.Size(
+                        kernelSize,
+                        kernelSize
+                    )
+                );
+
+            Cv2.MorphologyEx(
                 edges,
+                closedEdges,
+                MorphTypes.Close,
+                kernel,
+                iterations:
+                    Math.Max(
+                        1,
+                        _detectionSettings.MorphologyIterations
+                    )
+            );
+
+            // ------------------------------------------------
+            // FIND OBJECT CONTOURS
+            // ------------------------------------------------
+
+            Cv2.FindContours(
+                closedEdges,
                 out OpenCvSharp.Point[][] contours,
                 out HierarchyIndex[] hierarchy,
                 RetrievalModes.External,
@@ -200,27 +344,31 @@ namespace Quality_Vision.Services
             double imageArea =
                 rectified.Width * rectified.Height;
 
-            OpenCvSharp.Rect? bestRectangle = null;
+            RotatedRect? bestRectangle = null;
+
             double bestArea = 0;
 
             foreach (OpenCvSharp.Point[] contour in contours)
             {
-                double contourArea = Cv2.ContourArea(contour);
+                double contourArea =
+                    Cv2.ContourArea(contour);
 
-                // Ignore very small things/noise
-                if (contourArea < imageArea * 0.01)
+                if (contourArea <
+                    imageArea *
+                    _detectionSettings.MinimumObjectAreaPercent)
                 {
                     continue;
                 }
 
-                // Ignore something that basically fills the whole image
-                if (contourArea > imageArea * 0.95)
+                if (contourArea >
+                    imageArea *
+                    _detectionSettings.MaximumObjectAreaPercent)
                 {
                     continue;
                 }
 
-                OpenCvSharp.Rect rectangle =
-                    Cv2.BoundingRect(contour);
+                RotatedRect rectangle =
+                    Cv2.MinAreaRect(contour);
 
                 if (contourArea > bestArea)
                 {

@@ -4,6 +4,7 @@ using Quality_Vision.Models;
 using Quality_Vision.Services;
 using System.Linq;
 using System.Windows.Threading;
+using Microsoft.Extensions.Configuration;
 
 namespace Quality_Vision
 {
@@ -12,17 +13,41 @@ namespace Quality_Vision
         private readonly CameraService _cameraService;
         private readonly VisionService _visionService;
         private readonly DispatcherTimer _cameraTimer;
+        private readonly AppSettings _settings;
+        private int _measurementMissFrames = 0;
 
         public MainWindow()
         {
             InitializeComponent();
 
+            IConfiguration configuration =
+                new ConfigurationBuilder()
+                    .SetBasePath(AppContext.BaseDirectory)
+                    .AddJsonFile(
+                        "appsettings.json",
+                        optional: false,
+                        reloadOnChange: true)
+                    .Build();
+
+            _settings =
+                configuration.Get<AppSettings>()
+                ?? throw new InvalidOperationException(
+                    "Could not load appsettings.json.");
+
             _cameraService = new CameraService();
-            _visionService = new VisionService();
+            _visionService = new VisionService(
+                _settings.ArUco,
+                _settings.Detection,
+                _settings.Calibration
+            );
+
+            int previewFps =
+                Math.Max(1, _settings.Vision.PreviewFps);
 
             _cameraTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(33)
+                Interval = TimeSpan.FromMilliseconds(
+                    1000.0 / previewFps)
             };
 
             _cameraTimer.Tick += CameraTimer_Tick;
@@ -32,35 +57,59 @@ namespace Quality_Vision
         }
 
         private void MainWindow_Loaded(
-            object sender,
-            System.Windows.RoutedEventArgs e)
+    object sender,
+    System.Windows.RoutedEventArgs e)
         {
-            bool started = _cameraService.Start(1);
+            StationNameText.Text =
+                _settings.Station.StationName;
+
+            bool started =
+                _cameraService.Start(
+                    _settings.Camera);
 
             if (!started)
             {
                 CameraStatusText.Text = "● Disconnected";
+
                 CameraStatusText.Foreground =
                     new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(215, 18, 19));
+                        System.Windows.Media.Color.FromRgb(
+                            215,
+                            18,
+                            19));
 
-                SystemStatusText.Text = "● System not ready";
+                SystemStatusText.Text =
+                    "● System not ready";
+
                 SystemStatusText.Foreground =
                     new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(215, 18, 19));
+                        System.Windows.Media.Color.FromRgb(
+                            215,
+                            18,
+                            19));
 
                 return;
             }
 
-            CameraStatusText.Text = "● Connected";
+            CameraStatusText.Text =
+                "● Connected";
+
             CameraStatusText.Foreground =
                 new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(34, 197, 94));
+                    System.Windows.Media.Color.FromRgb(
+                        34,
+                        197,
+                        94));
 
-            SystemStatusText.Text = "● System not ready";
+            SystemStatusText.Text =
+                "● System not ready";
+
             SystemStatusText.Foreground =
                 new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(215, 18, 19));
+                    System.Windows.Media.Color.FromRgb(
+                        215,
+                        18,
+                        19));
 
             _cameraTimer.Start();
         }
@@ -69,7 +118,13 @@ namespace Quality_Vision
     Mat frame,
     MarkerDetectionResult detection)
         {
-            int[] requiredIds = { 1, 2, 3, 4 };
+            int[] requiredIds =
+            {
+                _settings.ArUco.TopLeftMarkerId,
+                _settings.ArUco.TopRightMarkerId,
+                _settings.ArUco.BottomRightMarkerId,
+                _settings.ArUco.BottomLeftMarkerId
+            };
 
             // We need all four reference markers.
             if (!requiredIds.All(id => detection.Ids.Contains(id)))
@@ -137,11 +192,11 @@ namespace Quality_Vision
 
             OpenCvSharp.Point[] measurementRectangle =
             {
-        innerCorners[1],
-        innerCorners[2],
-        innerCorners[3],
-        innerCorners[4]
-    };
+                innerCorners[_settings.ArUco.TopLeftMarkerId],
+                innerCorners[_settings.ArUco.TopRightMarkerId],
+                innerCorners[_settings.ArUco.BottomRightMarkerId],
+                innerCorners[_settings.ArUco.BottomLeftMarkerId]
+            };
 
             Cv2.Polylines(
                 frame,
@@ -177,56 +232,107 @@ namespace Quality_Vision
             // Show rectified preview if all required markers were found
             if (rectified != null)
             {
-                OpenCvSharp.Rect? objectRectangle =
+                RotatedRect? objectRectangle =
                     _visionService.DetectObject(rectified);
 
                 if (objectRectangle.HasValue)
                 {
-                    OpenCvSharp.Rect rectangle =
+                    // We successfully detected an object in this frame,
+                    // so reset the counter that tracks failed detection frames.
+                    _measurementMissFrames = 0;
+
+                    // Get the detected rotated rectangle.
+                    // Unlike a normal Rect, this rectangle follows the angle of the object.
+                    RotatedRect rectangle =
                         objectRectangle.Value;
 
-                    // TEMPORARY calibration values.
-                    // Replace these with the actual physical dimensions
-                    // between the four inner ArUco corners.
-                    const double measurementAreaWidthMm = 1200.0;
-                    const double measurementAreaHeightMm = 700.0;
 
-                    // Calculate how many millimeters each pixel represents.
-                    double mmPerPixelX =
-                        measurementAreaWidthMm / rectified.Width;
+                    // Calculate how many millimeters each pixel represents
+                    // in the rectified image.
+                    double pixelsPerMm =
+                        _settings.Calibration.RectifiedPixelsPerMm;
 
-                    double mmPerPixelY =
-                        measurementAreaHeightMm / rectified.Height;
+                    double mmPerPixel =
+                        1.0 / pixelsPerMm;
 
-                    // Convert detected object size from pixels to millimeters.
+
+                    // Get the two detected sides of the rotated rectangle in pixels.
+                    double side1Pixels =
+                        rectangle.Size.Width;
+
+                    double side2Pixels =
+                        rectangle.Size.Height;
+
+
+                    // MinAreaRect can swap Width and Height depending on rotation.
+                    // For our material:
+                    // X = longest side
+                    // Y = shortest side
+                    double objectWidthPixels =
+                        Math.Max(side1Pixels, side2Pixels);
+
+                    double objectHeightPixels =
+                        Math.Min(side1Pixels, side2Pixels);
+
+
+                    // Convert the detected pixel dimensions into millimeters.
                     double objectWidthMm =
-                        rectangle.Width * mmPerPixelX;
+                        objectWidthPixels * mmPerPixel;
 
                     double objectHeightMm =
-                        rectangle.Height * mmPerPixelY;
+                        objectHeightPixels * mmPerPixel;
 
-                    // Update UI.
+
+                    // Update the live measurement values in the WPF UI.
                     XMeasurementText.Text =
                         $"{objectWidthMm:F1} mm";
 
                     YMeasurementText.Text =
                         $"{objectHeightMm:F1} mm";
 
-                    // Draw detected object.
-                    Cv2.Rectangle(
+
+                    // Get the four corner points of the rotated rectangle.
+                    Point2f[] boxPoints =
+                        rectangle.Points();
+
+
+                    // Convert the floating-point OpenCV coordinates
+                    // into integer pixel coordinates for drawing.
+                    OpenCvSharp.Point[] drawPoints =
+                        boxPoints
+                            .Select(p =>
+                                new OpenCvSharp.Point(
+                                    (int)p.X,
+                                    (int)p.Y))
+                            .ToArray();
+
+
+                    // Draw the rotated green outline around the detected object.
+                    Cv2.Polylines(
                         rectified,
-                        rectangle,
+                        new[] { drawPoints },
+                        true,
                         Scalar.LimeGreen,
                         3
                     );
 
-                    // Optional: show dimensions inside processed view.
+
+                    // Use the center of the detected object as the reference
+                    // point for positioning the X/Y text.
+                    int textX =
+                        (int)rectangle.Center.X;
+
+                    int textY =
+                        (int)rectangle.Center.Y;
+
+
+                    // Draw the X measurement inside the processed image.
                     Cv2.PutText(
                         rectified,
                         $"X: {objectWidthMm:F1} mm",
                         new OpenCvSharp.Point(
-                            rectangle.X,
-                            Math.Max(rectangle.Y - 35, 25)
+                            Math.Max(textX - 100, 10),
+                            Math.Max(textY - 25, 25)
                         ),
                         HersheyFonts.HersheySimplex,
                         0.7,
@@ -234,12 +340,14 @@ namespace Quality_Vision
                         2
                     );
 
+
+                    // Draw the Y measurement underneath the X measurement.
                     Cv2.PutText(
                         rectified,
                         $"Y: {objectHeightMm:F1} mm",
                         new OpenCvSharp.Point(
-                            rectangle.X,
-                            Math.Max(rectangle.Y - 10, 50)
+                            Math.Max(textX - 100, 10),
+                            Math.Max(textY, 50)
                         ),
                         HersheyFonts.HersheySimplex,
                         0.7,
@@ -249,8 +357,14 @@ namespace Quality_Vision
                 }
                 else
                 {
-                    XMeasurementText.Text = "--- mm";
-                    YMeasurementText.Text = "--- mm";
+                    _measurementMissFrames++;
+
+                    if (_measurementMissFrames >=
+                        _settings.Detection.MeasurementMissToleranceFrames)
+                    {
+                        XMeasurementText.Text = "--- mm";
+                        YMeasurementText.Text = "--- mm";
+                    }
                 }
 
                 RectifiedPreview.Source =
@@ -265,14 +379,23 @@ namespace Quality_Vision
             }
 
             // Count only reference markers 1, 2, 3 and 4
+            int[] requiredMarkerIds =
+            {
+                _settings.ArUco.TopLeftMarkerId,
+                _settings.ArUco.TopRightMarkerId,
+                _settings.ArUco.BottomRightMarkerId,
+                _settings.ArUco.BottomLeftMarkerId
+            };
+
             int markerCount = detection.Ids
                 .Distinct()
-                .Count(id => id is 1 or 2 or 3 or 4);
+                .Count(id => requiredMarkerIds.Contains(id));
 
-            MarkerStatusText.Text = $"{markerCount} / 4";
+            MarkerStatusText.Text =
+                $"{markerCount} / {requiredMarkerIds.Length}";
 
             // Update system status
-            if (markerCount == 4)
+            if (markerCount == requiredMarkerIds.Length)
             {
                 MarkerStatusText.Foreground =
                     new System.Windows.Media.SolidColorBrush(

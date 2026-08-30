@@ -1,0 +1,12 @@
+
+								Cheaper option							Production option
+Camera							Arducam AR0234 USB3						Basler ace 2 a2A2448-75ucBAS
+Resolution						1920×1200 / 2.3 MP						2448×2048 / 5 MP
+Approx. scale over 1.5 m		0.78 mm/px								0.61 mm/px
+Pixels representing 5 mm		~6.4 px									~8.2 px
+Global shutter					Yes										Yes
+Manual focus					Yes										Yes with manual C-mount lens
+Exposure control				Yes										Yes
+Gain control					Yes										Yes
+Lens mount						M12										C-mount
+USB3							Yes										Yes
